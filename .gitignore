@@ -1,0 +1,15 @@
+*.model
+*.log
+common/OCR_TEST/*
+ctpn/modelMSRA/*
+ctpn/modelICDAR2015/*
+ctpn/test_resultICDAR2015/*
+ctpn/test_resultMSRA/*
+*.out
+ctpn/logs_10/
+ctpn/logs_all/
+*.png
+*.jpg
+ctpn/model
+ctpn/modelall1
+ctpn/modelall
