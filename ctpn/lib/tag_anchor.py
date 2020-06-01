@@ -54,7 +54,7 @@ def valid_anchor(cy, h, height):
 
 # 输入一个实际的bbox，其对应的实际的anchor，网络的预测得分score
 # 求一个bbox中的正、负样本，位置预测、边缘优化值
-def tag_anchor(gt_anchor, cnn_output, gt_box):
+def tag_anchor1(gt_anchor, cnn_output, gt_box):
     # from 11 to 273, divide 0.7 each time
     # 0.7和IOU阈值是一样的，这样能保证在某个尺寸满足0.7时，下个尺寸不再满足，确保anchor唯一性
     anchor_height = [11, 16, 22, 32, 46, 66, 94, 134, 191, 273]  
@@ -134,3 +134,104 @@ def tag_anchor(gt_anchor, cnn_output, gt_box):
                 vertical_reg.append((a[0], max_position[0][0], max_position[1][0], vc, vh, np.max(iou)))
         positive += temp_positive
     return positive, negative, vertical_reg, side_refinement_reg
+
+
+
+
+# 输入一个实际的bbox，其对应的实际的anchor，网络的预测得分score
+# 求一个bbox中的正、负样本，位置预测、边缘优化值
+def tag_anchor(gt_anchor, cnn_output, gt_box, IOU):
+    # from 11 to 273, divide 0.7 each time
+    # 0.7和IOU阈值是一样的，这样能保证在某个尺寸满足0.7时，下个尺寸不再满足，确保anchor唯一性
+    anchor_height = [11, 16, 22, 32, 46, 66, 94, 134, 191, 273]  
+    # whole image h and w
+    height = cnn_output.shape[2]  # 这是默认的锚框（16*16）的行
+    width = cnn_output.shape[3]  # 这是默认的锚框（16*16）的列
+    # positive = []
+    # negative = []
+    # vertical_reg = []
+    # side_refinement_reg = []
+    x_left_side = min(gt_box[0], gt_box[6])  # 整个文本框bbox的最左侧
+    x_right_side = max(gt_box[2], gt_box[4])  # 整个文本框bbox的最右侧
+    left_side = False
+    right_side = False
+
+    # 遍历一个ground truth box中的所有anchors，是一个个小anchor（16宽，高不定）
+    for a in gt_anchor:
+
+        # a[0]表示anchor的水平id，如果水平id比图片宽度还宽，跳过
+        if a[0] >= int(width - 1):
+            continue
+
+        # 判断这个anchor的左边界是否为整个bbox的左边界
+        if x_left_side in range(a[0] * 16, (a[0] + 1) * 16):
+            left_side = True
+        else:
+            left_side = False
+
+        # 判断这个anchor的右边界是否为整个bbox的右边界
+        if x_right_side in range(a[0] * 16, (a[0] + 1) * 16):
+            right_side = True
+        else:
+            right_side = False
+
+        # 针对这个小anchor
+        iou = np.zeros((height, len(anchor_height)))
+        
+        for i in range(iou.shape[0]):  # 默认锚框（宽为16，高有10种）中的哪个y和h能和gt_anchor的y和h产生大于0.7的IOU
+            for j in range(iou.shape[1]):
+                if not valid_anchor((float(i) * 16.0 + 7.5), anchor_height[j], height):  # 第i行的，anchor_height为第j种的默认的锚框（如第5行，高度为22的锚框）
+                    continue
+                iou[i][j] = cal_IoU2((float(i) * 16.0 + 7.5), anchor_height[j], a[1], a[2])  # 计算默认的锚框和实际锚框的IOU
+                # print("iou1---"+str(iou[i][j]))
+                # print("iou2---"+str(cal_IoU2((float(i) * 16.0 + 7.5), anchor_height[j], a[1], a[2])))
+                if iou[i][j] <= IOU[a[0]][i][j][0]:
+                    continue
+                if iou[i][j] > 0.7:  # 如果IOU大于0.7的话，认为是正样本
+                    vc = (a[1] - (float(i) * 16.0 + 7.5)) / float(anchor_height[j])  # 实际中心的位置，缩放比例
+                    vh = math.log10(float(a[2]) / float(anchor_height[j]))  # 实际高度，缩放比例
+                    IOU[a[0]][i][j]=[iou[i][j],vc,vh]
+                    if left_side:
+                        o = (float(x_left_side) - (float(a[0]) * 16.0 + 7.5)) / 16.0   #感觉有点奇怪，为什么是anchor中心的横坐标对边界回归
+                        IOU[a[0]][i][j]=[iou[i][j],vc,vh,o]
+                    if right_side:
+                        o = (float(x_right_side) - (float(a[0]) * 16.0 + 7.5)) / 16.0
+                        IOU[a[0]][i][j]=[iou[i][j],vc,vh,o]
+                    # else:
+                    #     IOU[a[0]][i][j]=[iou[i][j],vc,vh]
+                else:
+                    IOU[a[0]][i][j]=[iou[i][j]]
+
+
+        if np.max(iou)<=0.7:
+            max_position = np.where(iou == np.max(iou))
+            #temp_positive.append((a[0], max_position[0][0], max_position[1][0], np.max(iou)))
+            vc = (a[1] - (float(max_position[0][0]) * 16.0 + 7.5)) / float(anchor_height[max_position[1][0]])
+            #print(a[2])
+            try:
+                vh = math.log10(float(a[2]) / float(anchor_height[max_position[1][0]]))
+            
+                # print(float(a[2]) / float(anchor_height[max_position[1][0]]))
+                # print(float(a[2]))
+                # raise ValueError
+                if left_side:
+                    o = (float(x_left_side) - (float(a[0]) * 16.0 + 7.5)) / 16.0
+                    IOU[a[0]][max_position[0][0]][max_position[1][0]]=[np.max(iou),vc,vh,o]
+                else:
+                    IOU[a[0]][max_position[0][0]][max_position[1][0]]=[np.max(iou),vc,vh]
+
+                if right_side:
+                    o = (float(x_right_side) - (float(a[0]) * 16.0 + 7.5)) / 16.0
+                    IOU[a[0]][max_position[0][0]][max_position[1][0]]=[np.max(iou),vc,vh,o]
+                else:
+                    IOU[a[0]][max_position[0][0]][max_position[1][0]]=[np.max(iou),vc,vh]
+            except:
+                print('vh error')
+                print(float(a[2]))
+                raise ValueError
+
+    return IOU
+
+
+
+    

@@ -6,10 +6,105 @@ import codecs
 import cv2
 import draw_image
 import lmdb
-
+import numpy as np
 import Net as Net
 from torch.utils.data import Dataset
+from tqdm import tqdm
+import random
+from torchvision.transforms import transforms
+from PIL import Image,ImageEnhance,ImageOps,ImageFile
 
+def get_rotate_img_boxes(img,bboxes,random_angle = 20):
+    # img = cv2.imread(img_file)
+    # fid = open(txt_file, 'r', encoding='utf-8-sig')
+    # bboxes = []
+    # for line in fid.readlines():
+    #     line = line.strip().replace('\ufeff', '').split(',')
+    #     line = line[:8]
+    #     line = [int(x) for x in line]
+    #     line = np.array(line)
+    #     line = line.reshape(4, 2)
+    #     line = cv2.minAreaRect(line)
+    #     line = cv2.boxPoints(line).astype(np.int)
+    #     line = order_point(line)
+    #     bboxes.append(line)
+    img1, M = random_rotate(img,random_angle)
+    new_all_rects = []
+    # bboxes = np.array(bboxes)
+    for item in bboxes:
+        rect = []
+        # print(item)
+        item = np.array(item)
+        # print(item)
+        item=item.reshape(4,2)
+        for coord in item:
+            # print(coord)
+            rotate_coord = cal_affine_coord(coord,M)
+            rect.append(rotate_coord)
+        new_all_rects.append((np.array(rect).reshape(8)).tolist())
+    return img1,new_all_rects
+
+def cal_affine_coord(ori_coord,M):
+    x = ori_coord[0]
+    y = ori_coord[1]
+    _x = x * M[0, 0] + y * M[0, 1] + M[0, 2]
+    _y = x * M[1, 0] + y * M[1, 1] + M[1, 2]
+    return [int(_x),int(_y)]
+
+def random_rotate(img,random_angle = 20):
+    angle = random.random() * 2 * random_angle - random_angle
+    w, h = img.shape[:2]
+    rotation_matrix = cv2.getRotationMatrix2D((h / 2, w / 2), angle, 1)
+    img_rotation = cv2.warpAffine(img, rotation_matrix, (h, w))
+    return img_rotation,rotation_matrix
+
+
+def randomGaussian(image, mean=0.2, sigma=0.3):
+    """
+    对图像进行高斯噪声处理
+    :param image:
+    :return:
+    """
+
+    def gaussianNoisy(im, mean=0.2, sigma=0.3):
+        """
+        对图像做高斯噪音处理
+        :param im: 单通道图像
+        :param mean: 偏移量
+        :param sigma: 标准差
+        :return:
+        """
+        for _i in range(len(im)):
+            im[_i] += random.gauss(mean, sigma)
+        return im
+
+    # 将图像转化成数组
+    img = np.asarray(image)
+    img = np.array(img)
+    img.flags.writeable = True  # 将数组改为读写模式
+    width, height = img.shape[:2]
+    img_r = gaussianNoisy(img[:, :, 0].flatten(), mean, sigma)
+    img_g = gaussianNoisy(img[:, :, 1].flatten(), mean, sigma)
+    img_b = gaussianNoisy(img[:, :, 2].flatten(), mean, sigma)
+    img[:, :, 0] = img_r.reshape([width, height])
+    img[:, :, 1] = img_g.reshape([width, height])
+    img[:, :, 2] = img_b.reshape([width, height])
+    return Image.fromarray(np.uint8(img))
+
+def randomColor(image):
+    """
+    对图像进行颜色抖动
+    :param image: PIL的图像image
+    :return: 有颜色色差的图像image
+    """
+    random_factor = np.random.randint(0, 21) / 10.  # 随机因子
+    color_image = ImageEnhance.Color(image).enhance(random_factor)  # 调整图像的饱和度
+    random_factor = np.random.randint(10, 21) / 10.  # 随机因子
+    brightness_image = ImageEnhance.Brightness(color_image).enhance(random_factor)  # 调整图像的亮度
+    random_factor = np.random.randint(10, 21) / 10.  # 随机因1子
+    contrast_image = ImageEnhance.Contrast(brightness_image).enhance(random_factor)  # 调整图像对比度
+    random_factor = np.random.randint(0, 21) / 10.  # 随机因子
+    return ImageEnhance.Sharpness(contrast_image).enhance(random_factor)  # 调整图像锐度 
 
 # 读取图片的标签，以list形式返回
 def read_gt_file(path, have_BOM=False):
@@ -48,18 +143,39 @@ def create_dataset_icdar2015(img_root, gt_root, output_path):
 # 缩放图像具有一定规则：首先要保证文本框label的最短边也要等于600。
 # 我们通过scale = float(shortest_side)/float(min(height, width))来求得图像的缩放系数，对原始图像进行缩放。
 # 同时我们也要对我们的label也要根据该缩放系数进行缩放。
-def scale_img(img, gt, shortest_side=512):
+def scale_img0(img, gt):
     height = img.shape[0]
     width = img.shape[1]
-    #scale = float(shortest_side)/float(min(height, width))
-    img = cv2.resize(img,(shortest_side,shortest_side))
-    #img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
-    # if img.shape[0] < img.shape[1] and img.shape[0] != shortest_side:
-    #     img = cv2.resize(img, (shortest_side, img.shape[1]))
-    # elif img.shape[0] > img.shape[1] and img.shape[1] != shortest_side:
-    #     img = cv2.resize(img, (img.shape[0], shortest_side))
-    # elif img.shape[0] != shortest_side:
-    #     img = cv2.resize(img, (shortest_side, shortest_side))
+    short_side=640
+    long_side=960
+    if min(height, width)<long_side:
+        scale = float(short_side)/float(min(height, width))
+        # img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+        if scale*max(height,width)>1440:
+            longer=1440
+        else :
+            longer=int(np.floor(scale*max(height,width)))
+        if img.shape[0] < img.shape[1]: #and img.shape[0] != short_side:
+            img = cv2.resize(img, (longer,short_side ))
+        else:# img.shape[0] > img.shape[1]: # and img.shape[1] != short_side:
+            img = cv2.resize(img, (short_side,longer))
+        # elif img.shape[0] != short_side:
+        #     img = cv2.resize(img, (short_side, short_side))
+    else :
+        scale = float(long_side)/float(min(height, width))
+        # img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+        if scale*max(height,width)>1440:
+            longer=1440
+        else :
+            longer=int(np.floor(scale*max(height,width)))
+        if img.shape[0] < img.shape[1]:# and img.shape[0] != long_side:
+            img = cv2.resize(img, (longer,long_side))
+        else:# img.shape[0] > img.shape[1]: #and img.shape[1] != long_side:
+            img = cv2.resize(img, (long_side,longer))
+        # elif img.shape[0] != long_side:
+        #     img = cv2.resize(img, (long_side, long_side))
+    # img = cv2.resize(img,(shortest_side,shortest_side))
+
     # 求出h和w方向上的缩放比例
     h_scale = float(img.shape[0])/float(height)
     w_scale = float(img.shape[1])/float(width)
@@ -75,6 +191,37 @@ def scale_img(img, gt, shortest_side=512):
     # 返回缩放后的图片和label
     return img, scale_gt
 
+min_size_list=[512,640,720,800,960]
+def scale_img(img, gt):
+    height = img.shape[0]
+    width = img.shape[1]
+    short_side = np.random.choice(min_size_list,1)[0]
+
+    scale = float(short_side)/float(min(height, width))
+        # img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+    if scale*max(height,width)>1440:
+        longer=1440
+    else :
+        longer=int(np.floor(scale*max(height,width)))
+    if img.shape[0] < img.shape[1]: #and img.shape[0] != short_side:
+        img = cv2.resize(img, (longer,short_side ))
+    else:# img.shape[0] > img.shape[1]: # and img.shape[1] != short_side:
+        img = cv2.resize(img, (short_side,longer))
+    
+    # 求出h和w方向上的缩放比例
+    h_scale = float(img.shape[0])/float(height)
+    w_scale = float(img.shape[1])/float(width)
+    scale_gt = []
+    for box in gt:
+        scale_box = []
+        for i in range(len(box)):
+            if i % 2 == 0:
+                scale_box.append(int(int(box[i]) * w_scale))
+            else:
+                scale_box.append(int(int(box[i]) * h_scale))
+        scale_gt.append(scale_box)
+    # 返回缩放后的图片和label
+    return img, scale_gt
 
 def scale_img_only(img, shortest_side=600):
     height = img.shape[0]

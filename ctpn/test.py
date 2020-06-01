@@ -17,7 +17,7 @@ import shutil
 import sys
 import DetEval
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 running_mode='gpu'
 
@@ -35,7 +35,7 @@ THRESH_HOLD = 0.7
 NMS_THRESH = 0.3
 NEIGHBOURS_MIN_DIST = 50
 MIN_ANCHOR_BATCH = 2
-MODEL = './model/ctpn-msra_ali-29-end.model'
+MODEL = './model0/ctpn-18-end.model'
 
 
 def threshold(coords, min_, max_):
@@ -325,7 +325,7 @@ def random_test(net):
 
         im = cv2.imread(t) # 把图片读取为opencv对象
 
-        im, gt_txt = lib.dataset_handler.scale_img(im, gt_txt,1024)  # 图像缩放，保证最短边为600，标签也同步缩放
+        im, gt_txt = lib.dataset_handler.scale_img(im, gt_txt)  # 图像缩放，保证最短边为600，标签也同步缩放
         #print("im = {}".format(im.shape))
 
 
@@ -417,14 +417,15 @@ if __name__ == '__main__':
     print("Mode: %s" % running_mode)
     net = Net.CTPN()
     if running_mode == 'cpu':
-        net.load_state_dict(torch.load(MODEL, map_location=running_mode))
+        net.load_state_dict(torch.load(MODEL, map_location=running_mode)['net'])
     else:
-        net.load_state_dict(torch.load(MODEL))
+        net.load_state_dict(torch.load(MODEL)['net'])
     #print(net)
     net.eval()
     random_test(net)
-    print("thresh is {}".format(THRESH_HOLD))
-    print("nms thresh is {}".format(NMS_THRESH))
+    print(MODEL)
+    # print("thresh is {}".format(THRESH_HOLD))
+    # print("nms thresh is {}".format(NMS_THRESH))
     # if sys.argv[1] == 'random':
     #     random_test(net)
     # else:

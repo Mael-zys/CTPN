@@ -14,8 +14,8 @@ class CTPN_Loss(nn.Module):
         super(CTPN_Loss, self).__init__()
         self.Ns = 128
         self.ratio = 0.5
-        self.lambda1 = 1.0
-        self.lambda2 = 1.0
+        self.lambda1 = 1
+        self.lambda2 = 1
         self.Ls_cls = nn.CrossEntropyLoss()  # score的classification loss
         self.Lv_reg = nn.SmoothL1Loss()  # h,y的regression loss
         self.Lo_reg = nn.SmoothL1Loss()  # side refinement loss

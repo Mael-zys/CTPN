@@ -91,3 +91,6 @@ def init_weight(net):
 
     torch.nn.init.normal_(net.side_refinement.weight, mean=0, std=0.01)
     torch.nn.init.constant_(net.side_refinement.bias, val=0)
+
+    # torch.nn.init.normal_(net.dd.weight, mean=0, std=0.01)
+    # torch.nn.init.constant_(net.dd.bias, val=0)

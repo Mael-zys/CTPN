@@ -52,7 +52,6 @@ def generate_gt_anchor(img, box, anchor_width=16, draw_img_gt=None):
         result.append((position, cy, h))  # result保存图片中box的所有ground truth anchor的水平位置、y、h
         draw_img_gt = draw_image.draw_box_h_and_c(draw_img_gt, position, cy, h)  # 把anchor画出来
     draw_img_gt = draw_image.draw_box_4pt(draw_img_gt, box, color=(0, 0, 255), thickness=1)
-    # cv2.imwrite('a.jpg',draw_img_gt)
     return result, draw_img_gt
 
 
@@ -182,22 +181,16 @@ def calcLine(box):
 def cal_y_top_and_bottom2(raw_img, position_pair, box):
     y_top = []
     y_bottom = []
-    # box = sortCoords(box)
-    box = [box[6],box[7],box[0],box[1],box[2],box[3],box[4],box[5]]
-    # box = []
+    box = sortCoords(box)
     lines = calcLine(box)
     whichline = []
     for k in range(len(position_pair)):
-        # box_x = [box[0],box[2],box[4],box[6]]
-        # box_x.sort()
-        # box_left_left = box_x[0]
-        # box_left_right = box_x[1]
-        # box_right_left = box_x[2]
-        # box_right_right = box_x[3]
-        box_left_left = min(box[0],box[2])
-        box_left_right = max(box[0],box[2])
-        box_right_left = min(box[4],box[6])
-        box_right_right = max(box[4],box[6])
+        box_x = [box[0],box[2],box[4],box[6]]
+        box_x.sort()
+        box_left_left = box_x[0]
+        box_left_right = box_x[1]
+        box_right_left = box_x[2]
+        box_right_right = box_x[3]
         anchor_middle_x = position_pair[k][0] + 7.5
 
         if anchor_middle_x >= box_left_right and anchor_middle_x <= box_right_left:  # 位于box中段的
@@ -219,10 +212,10 @@ def cal_y_top_and_bottom2(raw_img, position_pair, box):
             anchor_y_top = calcY(anchor_middle_x, lines[0])
             anchor_y_bottom = calcY(anchor_middle_x, lines[1])
             if k_l12 > 0:
-                anchor_y_top = calcY(anchor_middle_x, lines[1])
+                anchor_y_top = calcY(anchor_middle_x, lines[0])
                 anchor_y_bottom = calcY(anchor_middle_x, lines[2])
             else:
-                anchor_y_top = calcY(anchor_middle_x, lines[0])
+                anchor_y_top = calcY(anchor_middle_x, lines[2])
                 anchor_y_bottom = calcY(anchor_middle_x, lines[1])
             y_top.append(anchor_y_top)
             y_bottom.append(anchor_y_bottom)
@@ -249,10 +242,10 @@ def cal_y_top_and_bottom2(raw_img, position_pair, box):
                     continue
                 k_l12 = -(lines[2][0]/lines[2][1])
                 if k_l12 > 0:
-                    anchor_y_top = calcY(anchor_middle_x, lines[1])
+                    anchor_y_top = calcY(anchor_middle_x, lines[0])
                     anchor_y_bottom = calcY(anchor_middle_x, lines[2])
                 else:
-                    anchor_y_top = calcY(anchor_middle_x, lines[0])
+                    anchor_y_top = calcY(anchor_middle_x, lines[2])
                     anchor_y_bottom = calcY(anchor_middle_x, lines[1])
                 y_top.append(anchor_y_top)
                 y_bottom.append(anchor_y_bottom)
@@ -261,17 +254,17 @@ def cal_y_top_and_bottom2(raw_img, position_pair, box):
 
         elif anchor_middle_x > box_right_left and anchor_middle_x < box_right_right:  # 位于右边界上的
             if lines[3][1] == 0:
-                anchor_y_top = calcY(anchor_middle_x, lines[1])
-                anchor_y_bottom = calcY(anchor_middle_x, lines[0])
+                anchor_y_top = calcY(anchor_middle_x, lines[0])
+                anchor_y_bottom = calcY(anchor_middle_x, lines[1])
                 y_top.append(anchor_y_top)
                 y_bottom.append(anchor_y_bottom)
                 continue
             k_l34 = -(lines[3][0]/lines[3][1])
             if k_l34> 0:
                 anchor_y_top = calcY(anchor_middle_x, lines[3])
-                anchor_y_bottom = calcY(anchor_middle_x, lines[0])
+                anchor_y_bottom = calcY(anchor_middle_x, lines[1])
             else:
-                anchor_y_top = calcY(anchor_middle_x, lines[1])
+                anchor_y_top = calcY(anchor_middle_x, lines[0])
                 anchor_y_bottom = calcY(anchor_middle_x, lines[3])
             y_top.append(anchor_y_top)
             y_bottom.append(anchor_y_bottom)
@@ -299,9 +292,9 @@ def cal_y_top_and_bottom2(raw_img, position_pair, box):
                 k_l34 = -(lines[3][0]/lines[3][1]) 
                 if k_l34 > 0:
                     anchor_y_top = calcY(anchor_middle_x, lines[3])
-                    anchor_y_bottom = calcY(anchor_middle_x, lines[0])
+                    anchor_y_bottom = calcY(anchor_middle_x, lines[1])
                 else:
-                    anchor_y_top = calcY(anchor_middle_x, lines[1])
+                    anchor_y_top = calcY(anchor_middle_x, lines[0])
                     anchor_y_bottom = calcY(anchor_middle_x, lines[3])
                 y_top.append(anchor_y_top)
                 y_bottom.append(anchor_y_bottom)
